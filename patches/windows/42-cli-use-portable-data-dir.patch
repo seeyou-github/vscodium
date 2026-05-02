@@ -1,0 +1,54 @@
+diff --git a/cli/src/state.rs b/cli/src/state.rs
+index 1c6d8b89..8df8b2d7 100644
+--- a/cli/src/state.rs
++++ b/cli/src/state.rs
+@@ -113,6 +113,25 @@ impl<T> PersistedState<T>
+ 	}
+ }
+ 
++fn get_portable_cli_root() -> Option<PathBuf> {
++	if let Some(portable_dir) = std::env::var_os("VSCODE_PORTABLE") {
++		return Some(PathBuf::from(portable_dir).join("cli"));
++	}
++
++	let exe = std::env::current_exe().ok()?;
++	let bin_dir = exe.parent()?;
++	if bin_dir.file_name().and_then(|name| name.to_str()) != Some("bin") {
++		return None;
++	}
++
++	let app_dir = bin_dir.parent()?;
++	let portable_data_dir = app_dir.join("data");
++	if portable_data_dir.exists() {
++		return Some(portable_data_dir.join("cli"));
++	}
++
++	None
++}
++
+ impl LauncherPaths {
+ 	/// todo@conno4312: temporary migration from the old CLI data directory
+ 	pub fn migrate(root: Option<String>) -> Result<LauncherPaths, AnyError> {
+@@ -120,6 +139,10 @@ impl LauncherPaths {
+ 			return Self::new(root);
+ 		}
+ 
++		if let Some(portable_root) = get_portable_cli_root() {
++			return Self::new_for_path(portable_root);
++		}
++
+ 		let home_dir = match dirs::home_dir() {
+ 			None => return Self::new(root),
+ 			Some(d) => d,
+@@ -143,6 +166,10 @@ impl LauncherPaths {
+ 	}
+ 
+ 	pub fn new(root: Option<String>) -> Result<LauncherPaths, AnyError> {
++		if root.is_none() {
++			if let Some(portable_root) = get_portable_cli_root() {
++				return Self::new_for_path(portable_root);
++			}
++		}
+ 		let root = root.unwrap_or_else(|| format!("~/{DEFAULT_DATA_PARENT_DIR}/cli"));
+ 		let mut replaced = root.to_owned();
+ 		for token in HOME_DIR_ALTS {
