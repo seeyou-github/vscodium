@@ -1,0 +1,82 @@
+name: Build - Windows - x64 Zip
+
+on:
+  push:
+    branches:
+      - master
+    paths-ignore:
+      - "**/*.md"
+  workflow_dispatch: {}
+
+env:
+  APP_NAME: VSCodium
+  BINARY_NAME: codium
+  GH_REPO_PATH: ${{ github.repository }}
+  GITHUB_BRANCH: master
+  ORG_NAME: ${{ github.repository_owner }}
+  OS_NAME: windows
+  VSCODE_QUALITY: stable
+
+permissions: {}
+
+jobs:
+  build_zip:
+    runs-on: windows-2022
+    defaults:
+      run:
+        shell: bash
+    env:
+      VSCODE_ARCH: x64
+      SHOULD_BUILD: yes
+      SHOULD_BUILD_REH: no
+      SHOULD_BUILD_REH_WEB: no
+      SHOULD_BUILD_ZIP: yes
+      SHOULD_BUILD_EXE_SYS: no
+      SHOULD_BUILD_EXE_USR: no
+      SHOULD_BUILD_MSI: no
+      SHOULD_BUILD_MSI_NOUP: no
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ env.GITHUB_BRANCH }}
+          persist-credentials: false
+
+      - name: Setup Node.js environment
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version-file: '.nvmrc'
+
+      - name: Setup Python 3
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: '3.11'
+
+      - name: Clone VSCode repo
+        run: ./get_repo.sh
+
+      - name: Build
+        run: ./build.sh
+
+      - name: Compress vscode artifact
+        run: |
+          find vscode -type f -not -path "*/node_modules/*" -not -path "vscode/.build/node/*" -not -path "vscode/.git/*" > vscode.txt
+          echo "vscode/.build/extensions/node_modules" >> vscode.txt
+          echo "vscode/.git" >> vscode.txt
+          tar -czf vscode.tar.gz -T vscode.txt
+
+      - name: Build x64 zip
+        env:
+          CI_BUILD: yes
+        run: ./build/windows/package.sh
+
+      - name: Prepare assets
+        run: ./prepare_assets.sh
+
+      - name: Upload zip artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: vscodium-win32-x64-zip
+          path: assets/*.zip
+          if-no-files-found: error
+          retention-days: 7
